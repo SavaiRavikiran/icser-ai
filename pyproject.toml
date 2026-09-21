@@ -1,0 +1,20 @@
+[project]
+name = "icser-ai"
+version = "1.0.0"
+description = "Autonomous Pharmacovigilance ICSR Case Processing"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]   
