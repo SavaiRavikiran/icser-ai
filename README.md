@@ -83,6 +83,10 @@ Sample scenarios and what to expect:
 | Incomplete | compliance fails and loops back to coding 3×, flagged for manual review |
 | Fatal: anaphylaxis | all 8 steps, submitted, 7-day deadline |
 
+### Screenshot
+
+![Pipeline Console running the "serious: abdominal pain" sample](docs/ui-screenshot.png)
+
 ### Running for real (Azure)
 
 ```bash
@@ -110,6 +114,7 @@ pytest          # 13 tests, run entirely in demo mode
 
 The remainder of this file is the original architecture and design write-up for the project.
 
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                          EXTERNAL SOURCES                               │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐  ┌──────────────────┐                                         │
@@ -277,6 +282,7 @@ The remainder of this file is the original architecture and design write-up for 
 │  • Manual fallback: scripts/ops/manual-case-processor.py (if AI is down, humans can still submit)                        │
 │                                                                                                                          │
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘   
+```
 
 
 
@@ -357,6 +363,7 @@ Azure AI Foundry Langfuse project examples
 
 View all
 The Architecture (walk through this layer by layer)
+```text
 User Query
     │
     ▼
@@ -390,6 +397,7 @@ User Query
 │    token consumption, eval scores           │
 │  • Alerts: cost budget breach, eval drop    │
 └─────────────────────────────────────────────┘
+```
 
 What I specifically did (map to resume bullets)
 Area	What you did	Interview talking point
@@ -476,6 +484,7 @@ Layer 4: Observability (Langfuse)
 
 The trace hierarchy looks like:
 
+```text
 Trace: user_query_12345
 ├── Span: agent_orchestrator
 │   ├── Generation: LLM_call (extraction)
@@ -488,6 +497,7 @@ Trace: user_query_12345
 │   │   └── Span: metadata_filter
 │   └── Generation: LLM_call (compliance_check)
 └── Span: response_assembly
+```
 
 Each generation node captures token counts, latency, model name, and cost. This is what makes the cost dashboard and eval pipeline possible downstream."
 
@@ -576,10 +586,12 @@ Framework-agnostic deployment	If you ever need to move off Azure (multi-cloud, o
 🔑 The Specific Case: Your Compliance Loop
 In the architecture I described, the compliance check → re-extract loop is the one thing that genuinely needs LangGraph (or equivalent custom code):
 
+```text
 Extraction Node → Compliance Check
        ↑                    │
        │    (fail, retry < 3)│
        └────────────────────┘
+```
 
 Foundry's handoff pattern is one-directional (Agent A → Agent B, done). It doesn't natively support "go back to Agent A if B fails, up to N times." You'd need to either:
 
@@ -590,6 +602,7 @@ LangGraph compliance loop implementation Foundry
 
 View all
 Recommended Architecture (Updated)
+```text
 ┌─────────────────────────────────────────────────────────┐
 │  Foundry Agent Service (managed runtime)                │
 │                                                         │
@@ -609,6 +622,7 @@ Recommended Architecture (Updated)
 │  • OpenTelemetry → your Langfuse/Prometheus             │
 │  • Durable checkpointing                                │
 └─────────────────────────────────────────────────────────┘
+```
 
 You keep LangGraph for the graph logic, but Foundry handles everything else — models, identity, scaling, tools, safety, deployment.  You no longer need to manage K8s for the agent service itself.
 
@@ -644,6 +658,7 @@ One-liner
 Key word: "autonomously." Not "we run scripts." The agents decide what to check, interpret results, and escalate based on context.
 
 Architecture (interview walkthrough)
+```text
 Deployment Event (Azure DevOps pipeline webhook)
     │
     ▼
@@ -695,6 +710,7 @@ Deployment Event (Azure DevOps pipeline webhook)
 │  • LLM cost per validation run                           │
 │  • Alert: validation failed → page on-call               │
 └──────────────────────────────────────────────────────────┘
+```
 
 
 Sanity Automation project code example
@@ -785,6 +801,7 @@ big SRE issues and solutions
 
 View all
 Architecture
+```text
 Alert (Prometheus/Alertmanager webhook)
     │
     ▼
@@ -855,6 +872,7 @@ Alert (Prometheus/Alertmanager webhook)
 │  • Time-to-first-hypothesis (target: < 2 min)                  │
 │  • Alert: agent confidence < 50% → escalate to human           │
 └────────────────────────────────────────────────────────────────┘
+```
 
 
 Azure AI Foundry Orchestrator Agent Prometheus Log Investigator documentation
@@ -1333,6 +1351,7 @@ def meddra_coding_agent(state: ICSRState):
 
 The trace hierarchy for a single case looks like:
 
+```text
 Trace: icser_case_784512
 ├── Span: intake_agent
 │   ├── Generation: gpt-4o (extraction)
@@ -1359,6 +1378,7 @@ Trace: icser_case_784512
 └── Span: submission_agent
     └── Span: e2b_xml_generation
         └── Span: faers_submission (ack_received=true)
+```
 
 Total tokens per case: ~15,000-25,000. Cost per case: $0.05-0.12."
 
@@ -1434,6 +1454,7 @@ Why this impresses: You bridged the AI world (Langfuse) and the infra world (Pro
 Layer 7: Infrastructure (Kubernetes)
 "The full stack runs on EKS (AWS) / AKS (Azure) — we use AKS since everything is Azure-native. Namespace layout:
 
+```text
 ai-prod/
 ├── icser-agent-service       (Deployment, 5 replicas, HPA on queue depth)
 ├── langfuse-api              (Deployment, 3 replicas)
@@ -1445,6 +1466,7 @@ ai-prod/
 ├── alertmanager              (Deployment, 2 replicas)
 ├── vector-index-builder      (CronJob, monthly, 8 vCPU)
 └── eval-batch-runner         (CronJob, weekly, 16 vCPU)
+```
 
 ai-staging/  (same topology, smaller replicas, different model configs)
 ai-dev/      (single replica, cheap models, no real patient data)
@@ -1460,17 +1482,22 @@ Why this impresses: Namespace layout, HPA on custom metrics, network policies, s
 Layer 8: CI/CD (Azure DevOps)
 "The pipeline in Azure DevOps has 4 stages:
 
+```text
 Stage 1: BUILD
 ├── Lint (ruff) + Type check (mypy)
 ├── Unit tests (pytest, 85% coverage)
 └── Docker build → push to ACR
+```
 
+```text
 Stage 2: DEPLOY STAGING
 ├── Helm upgrade (ai-staging namespace)
 ├── Run smoke tests (10 sample cases through pipeline)
 └── Run eval regression (500 golden cases)
     └── IF eval fails → STOP, do not proceed
+```
 
+```text
 Stage 3: DEPLOY PROD
 ├── Helm upgrade (ai-prod namespace)
 ├── **ALERT SILENCING:** Call Grafana API → mute expected alerts
@@ -1478,11 +1505,14 @@ Stage 3: DEPLOY PROD
 │   for the deployment window (10 min)
 ├── Health check (gRPC health endpoint)
 └── **RESTORE ALERTS:** Call Grafana API → unmute
+```
 
+```text
 Stage 4: VERIFY
 ├── Run 50 production cases through new version
 ├── Compare eval scores vs. pre-deploy baseline
 └── IF regression → auto-rollback (Helm rollback)
+```
 
 The alert silencing is the piece I'm most proud of. Before this, every deployment triggered 20-30 Grafana alerts (pod OOM during restart, brief p95 spike, queue depth jump). On-call engineers had to manually dismiss them — and they routinely forgot, which meant real alerts got buried in noise. Now it's automated: the pipeline mutes, deploys, verifies, and unmutes. 100+ false alerts per year → zero."
 
@@ -1539,6 +1569,7 @@ can you please give me complete all files code .?
 Generated complete ICSR architecture codebase
 Complete ICSR Case Processing — Full Codebase
 Project Structure
+```text
 icser-ai/
 ├── docker/
 │   ├── Dockerfile
@@ -1634,6 +1665,7 @@ icser-ai/
 ├── pyproject.toml
 ├── .env.example
 └── README.md
+```
 
 
 meddra agent github
@@ -4505,6 +4537,7 @@ create detail complete architerure diagram which showing completing thing in det
 
 🏗️ Created comprehensive ICSR architecture diagram
 Complete ICSR Architecture Diagram
+```text
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                                      EXTERNAL SOURCES                                                                      │
 │                                                                                                                                            │
@@ -4686,6 +4719,7 @@ Complete ICSR Architecture Diagram
 │  │  • 200,000+ prior cases (5 years)                                                                                                   │  │
 │  │  • Vector similarity threshold: 0.92                                                                                                 │  │
 │  │  • If match found → LLM makes final duplicate judgment                                     
+```
 
 
 Copy
@@ -4696,6 +4730,7 @@ continua and complete reaminag thing
 
 Completed the remaining architecture diagram sections
 Complete Architecture Diagram (Continued from DEDUP RAG)
+```text
 │  ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  │
 │  │  DEDUP RAG                                                                                                                        │  │
 │  │                                                                                                                                      │  │
@@ -4983,6 +5018,7 @@ Complete Architecture Diagram (Continued from DEDUP RAG)
 │  │  • NO secrets in env vars, config maps, or image layers                                                                           │  │
 │  │                                                                                                                                      │  │
 │  └────────────────────────────────────────────────────────────────────────────────
+```
 
 
 Copy
@@ -4993,6 +5029,7 @@ continua and complete reaminag thing
 
 Continued the architecture diagram to completion
 Complete Architecture Diagram (Continued from SECRETS MANAGEMENT)
+```text
 │  │  SECRETS MANAGEMENT:                                                                                                              │  │
 │  │  • Azure Key Vault (kv-icser-ai) stores: Foundry API key, Search key, PG password, CH password, PagerDuty key                    │  │
 │  │  • Mounted via azure-secrets-store CSI driver → K8s Secrets (auto-rotated)                                                        │  │
@@ -5241,6 +5278,7 @@ Complete Architecture Diagram (Continued from SECRETS MANAGEMENT)
 │                                                                                   IAC LAYER (Terraform)                                │
 │                                                                                                                                           │
 │  ┌────────────────────────────────
+```
 
 
 Copy
@@ -5251,6 +5289,7 @@ continua and complete reaminag thing
 
 Completed the architecture diagram starting from the Terraform layer
 Complete Architecture Diagram (Continued from IAC LAYER)
+```text
 │  ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  │
 │  │  IAC LAYER (Terraform)                                                                                                      │  │
 │  │                                                                                                                                      │  │
@@ -5351,6 +5390,7 @@ Complete Architecture Diagram (Continued from IAC LAYER)
 │  └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                                                                           │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────
+```
 
 
 Copy
@@ -5361,6 +5401,7 @@ continua and complete reaminag thing
 
 Continued architecture diagram with data flow, DR, and scalability
 Complete Architecture Diagram (Continued from DATA FLOW)
+```text
 │  │  TOTAL END-TO-END: ~18 seconds (p50) | ~45 seconds (p95) | ~120 seconds (p99, includes compliance retry)                            │  │
 │  │                                                                                                                                      │  │
 │  │  DEADLINE COMPLIANCE:                                                                                                               │  │
@@ -5582,6 +5623,7 @@ Complete Architecture Diagram (Continued from DATA FLOW)
 │  │  └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                                                                           │
 └────────
+```
 
 
 Copy
@@ -5592,6 +5634,7 @@ continua and complete reaminag thing
 
 Completed the architecture diagram
 Complete Architecture Diagram (Continued from KEY METRICS & SLAs)
+```text
 │  │  │  │  TOTAL                │  $36,000       │  $33,000          │  -8.3% (under budget)          │  │  │  │
 │  │  │  │  └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  │  │  │
 │  │  │  │  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  │  │
@@ -5866,6 +5909,7 @@ Complete Architecture Diagram (Continued from KEY METRICS & SLAs)
 │  └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                                                                           │
 └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
 
 
 Continuum and Complete Reaminag course
@@ -5874,6 +5918,7 @@ View all
 How to Use This in an Interview
 Don't show this diagram. Instead, draw a simplified 3-box version on a whiteboard:
 
+```text
 ┌──────────────┐      ┌──────────────────────────────────┐      ┌──────────────────┐
 │  Event Hubs  │─────►│  LangGraph (8 agents on Foundry) │─────►│  FAERS Submit   │
 │  (ingestion) │      │  + Langfuse (tracing)            │      │  (regulator)    │
@@ -5885,6 +5930,7 @@ Don't show this diagram. Instead, draw a simplified 3-box version on a whiteboar
                       │  Prometheus + Grafana            │
                       │  (cost, quality, latency, alerts)│
                       └──────────────────────────────────┘
+```
 
 Then say:
 
@@ -5906,6 +5952,7 @@ Why Self-Hosted (the #1 interview question)
 "We handle patient-identifiable information. Sending even trace metadata to a SaaS observability tool would violate Novartis data classification policy and potentially HIPAA/GDPR. So Langfuse runs entirely inside our VPC, in the ai-prod namespace, with no egress to the internet." 
 
 Self-Hosted Stack (exact K8s deployment)
+```text
 ai-prod namespace:
 ├── langfuse-api          (Deployment, 3 replicas, 1vCPU/2Gi, port 3000)
 ├── langfuse-worker       (Deployment, 2 replicas, 1vCPU/2Gi, processes async evals)
@@ -5913,6 +5960,7 @@ ai-prod namespace:
 ├── langfuse-clickhouse   (StatefulSet, 3 replicas, 4vCPU/16Gi, 500Gi SSD)
 ├── langfuse-redis        (Deployment, 2 replicas, 1vCPU/2Gi, maxmemory=4gb)
 └── langfuse-minio        (StatefulSet, 2 replicas, for file attachments)
+```
 
 Key tuning decisions I made:
 
@@ -5992,6 +6040,7 @@ View all
 Prompt Management (versioning + rollback)
 "Prompts are our most critical 'model weights' — a one-word change in the extraction prompt can shift accuracy by 3%. So we treat them with the same versioning discipline as code." 
 
+```text
 Langfuse Prompt Management:
 ├── Prompt: "intake_extraction"
 │   ├── v1.0 (2025-01-15) — Initial
@@ -6008,6 +6057,7 @@ Langfuse Prompt Management:
 └── Prompt: "compliance_check"
     ├── v1.0 (2025-02-01)
     └── v1.1 (2025-05-10) — Added PII check to narrative
+```
 
 How it works in code:
 
@@ -6026,6 +6076,7 @@ If confirmed regression: file ticket, investigate v1.4 change
 Datasets & Experiments (offline evaluation)
 "Before any prompt change goes to production, we run it against our golden dataset in Langfuse's experiment framework." 
 
+```text
 Langfuse Datasets:
 ├── Dataset: "icser_golden_500"
 │   ├── 500 cases curated by PV team
@@ -6040,6 +6091,7 @@ Langfuse Datasets:
 └── Dataset: "icser_multilingual"
     ├── 100 cases in 10 languages (German, Japanese, Spanish, etc.)
     └── Used in: language-specific accuracy tracking
+```
 
 Experiment workflow:
 
@@ -6069,6 +6121,7 @@ Langfuse LLM as a judge execution trace demo
 View all
 PART 2: EVALUATION PIPELINE — Production-Grade Depth
 The 3-Layer Evaluation Architecture
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │  LAYER 1: DETERMINISTIC CHECKS (fast, free, 100% of cases)                     │
 │  ┌───────────────────────────────────────────────────────────────────────────┐  │
@@ -6121,6 +6174,7 @@ The 3-Layer Evaluation Architecture
 │  │  Output: weekly quality report + Kappa trend in Grafana                   │  │
 │  └───────────────────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────────────────┘
+```
 
 LLM-as-Judge: The Exact Prompt
 JUDGE_PROMPT = """You are a senior pharmacovigilance quality reviewer with 15 years of experience
@@ -6441,6 +6495,7 @@ async def tracked_llm_call(model: str, prompt: str, agent_name: str, case_id: st
     return response.content
 
 Budget Alerting (3-tier)
+```text
 TIER 1: WARNING (Ticket via Jira)
 ├── Trigger: Daily cost rate > 80% of daily budget
 ├── Daily budget: $933 (monthly $28,000 / 30 days)
@@ -6448,7 +6503,9 @@ TIER 1: WARNING (Ticket via Jira)
 ├── Action: Jira ticket to AI platform team
 ├── Message: "Daily LLM cost at 80% of budget by {hour}:00. Projected monthly: ${X}"
 └── Frequency: Once per day (no repeat)
+```
 
+```text
 TIER 2: CRITICAL (Page via PagerDuty)
 ├── Trigger: Daily cost rate > 95% of daily budget
 ├── Alert at: $886/day
@@ -6456,13 +6513,16 @@ TIER 2: CRITICAL (Page via PagerDuty)
 ├── Message: "CRITICAL: Daily LLM cost at 95% of budget. Possible runaway agent loop or traffic spike."
 ├── Auto-action: If cost > 100% of daily budget → shed non-serious cases to batch queue
 └── Escalation: If not acknowledged in 30 min → page team lead
+```
 
+```text
 TIER 3: MONTHLY PROJECTION (Email to finance + team lead)
 ├── Trigger: Day 20, projected monthly spend > budget
 ├── Calculation: (actual_spend_day_20 / 20) × 30 = projected_monthly
 ├── Action: Email to AI platform lead + finance
 ├── Message: "Projected monthly LLM spend: $${X} (budget: $28,000). Variance: +${Y}."
 └── Follow-up: If projection > 120% of budget → cost review meeting
+```
 
 The Custom Prometheus Exporter (bridging Langfuse → Prometheus)
 # This runs every 30 seconds inside the agent service:
@@ -6512,6 +6572,7 @@ async def _scrape_langfuse_for_cost():
     PROJECTED_MONTHLY_COST.set(projected)
 
 Grafana Cost Dashboard (what the team sees)
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │  COST & BUDGET DASHBOARD                                                             │
 │                                                                                     │
@@ -6566,6 +6627,7 @@ Grafana Cost Dashboard (what the team sees)
 │  │  └─────────────────────────────────────────────────────────────────────┘   │    │
 │  └─────────────────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────────────────┘
+```
 
 The "Runaway Agent" Protection
 "The scariest cost scenario isn't a traffic spike — it's a bug in the agent loop. If the compliance check keeps failing and the agent keeps retrying, each case could make 30+ LLM calls instead of 8. I built 3 guards:"
@@ -6711,6 +6773,7 @@ Azure Foundry evaluation drift production ICSR token cost Langfuse custom metric
 
 View all
 The Drift Dashboard (Grafana)
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  DRIFT MONITORING DASHBOARD                                             │
 │                                                                         │
@@ -6738,6 +6801,7 @@ The Drift Dashboard (Grafana)
 │  │  (alert if drops > 0.05 from peak)                              │   │
 │  └─────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
+```
 
 2. Token Cost Per ICSR Case
 Current: $0.09 per case (average across all 8 agents) 
@@ -7286,11 +7350,13 @@ New drug launched, not represented in the set	Do NOT add it to the frozen set. A
 
 Versioning discipline:
 
+```text
 judge_calibration_frozen_50/
 ├── v1.0-2026-01-15.json      ← Current (production)
 ├── v1.0-2026-01-15.baseline  ← Judge scores on v1.0 (reference)
 ├── v0.9-2025-11-01.json      ← Archived (old judge model)
 └── CHANGELOG.md
+```
     - v1.0: Initial set, judge = gpt-4o-2025-05-08
     - v1.1: Case #34 expected score corrected (human annotation error)
     - v2.0: Judge migrated to gpt-4o-2025-11-01 (OpenAI deprecated old version)
@@ -7300,6 +7366,7 @@ Why never modify in place: The time series of judge scores on the frozen set is 
 3. Judge Drift Detection in Production
 The mechanism: re-score the same frozen 50 cases weekly, compare against baseline. 
 
+```text
 Every Monday 02:00 UTC (CronJob):
 │
 ├── 1. Load frozen 50-case set (v1.0)
@@ -7319,6 +7386,7 @@ Every Monday 02:00 UTC (CronJob):
 │      └── drift > 0.10  → 🚨 CRITICAL (PagerDuty: "Judge unreliable, disable as gate")
 │
 └── 6. If WARNING/CRITICAL:
+```
        • Check: did OpenAI push a model update? (check Foundry model version)
        • Check: did we change the judge prompt? (git log on prompts.py)
        • Action: re-pin model version OR re-baseline (if change was intentional)
@@ -7409,6 +7477,7 @@ View all
 2. Tools That Automate Weekly Judge Re-Scoring
 The CronJob + Python script + Langfuse API chain:
 
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  K8s CronJob: eval-batch-runner                                         │
 │  Schedule: 0 2 * * 1 (Monday 02:00 UTC)                                 │
@@ -7447,6 +7516,7 @@ The CronJob + Python script + Langfuse API chain:
 │  Step 8: Email summary to PV team lead                                  │
 │          → "Judge drift check W38: max drift 0.02 (threshold 0.05) ✓"  │
 └─────────────────────────────────────────────────────────────────────────┘
+```
 
 The CronJob YAML:
 
@@ -7496,6 +7566,7 @@ View all
 The 500 cases were selected over 6 weeks by the PV team + AI platform team:
 
 WEEK 1: DEFINE CRITERIA
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  Coverage matrix (each cell must have minimum cases):                   │
 │                                                                         │
@@ -7515,13 +7586,17 @@ WEEK 1: DEFINE CRITERIA
 │  • Report quality: 50% clear, 30% ambiguous, 20% contradictory         │
 │  • Time period: spread across 12 months (seasonal variation)            │
 └─────────────────────────────────────────────────────────────────────────┘
+```
 
+```text
 WEEK 2: CANDIDATE POOL (2000 cases)
 ├── Pull 2,000 cases from 12 months of production
 ├── Stratified random sampling matching the coverage matrix
 ├── Exclude: cases with known data entry errors (not representative)
 └── Exclude: cases where patient explicitly withdrew consent
+```
 
+```text
 WEEK 3: HUMAN ANNOTATION (2 annotators × 2000 cases)
 ├── 2 senior PV specialists independently score each case:
 │   • Correct drug name
@@ -7531,29 +7606,36 @@ WEEK 3: HUMAN ANNOTATION (2 annotators × 2000 cases)
 │   • Correct causality
 ├── Time: ~15 min/case × 2000 × 2 = ~1,000 hours (2 weeks, 2 people)
 └── Output: 2 annotation files (annotator_A.json, annotator_B.json)
+```
 
+```text
 WEEK 4: CONSENSUS + DISPUTES
 ├── Auto-compare: where A and B agree → "consensus" (golden answer)
 ├── Where A and B disagree → 3rd senior PV lead adjudicates
 ├── Target: > 95% agreement rate (if < 90%, rubric was unclear → revise)
 └── Result: ~1,800 cases with clear golden answers
+```
 
+```text
 WEEK 5: SELECT 500
 ├── From 1,800 consensus cases, select 500 that best match coverage matrix
 ├── Algorithm: greedy set cover (maximize coverage of all cells)
 ├── Ensure: no 2 cases are near-duplicates (cosine sim < 0.90)
 ├── Ensure: at least 5 cases per rare AE (Stevens-Johnson, etc.)
 └── Final: 500 cases, each with:
+```
     • input: {raw_text, source, metadata}
     • expected: {drug, ae_text, meddra_pt, meddra_code, severity, causality}
     • tags: ["multi_drug", "foreign_language", "rare_ae", "ambiguous", ...]
 
+```text
 WEEK 6: VALIDATE + FREEZE
 ├── Run current pipeline on all 500 (staging)
 ├── Record baseline: extraction=96.2%, coding=93.8%, narrative=91.0%
 ├── Store in Langfuse as dataset: "icser_golden_500"
 ├── Git-tag: "golden-v1.0-2026-01-15"
 └── Freeze. Refresh cadence: monthly (add 10 new cases, retire 10 old)
+```
 
 4. Golden Dataset — Structure + Representative Examples
 File format: golden_set.json
@@ -7949,6 +8031,7 @@ The threshold is the same for all 4 dimensions (extraction, coding, narrative, s
 3. Frozen Dataset Versioning
 Rule: never modify in place. Always create a new version.
 
+```text
 judge_calibration_frozen_50/
 ├── v1.0-2026-01-15.json          ← CURRENT (production)
 ├── v1.0-2026-01-15.baseline.json ← Judge scores on v1.0 (reference point)
@@ -7958,6 +8041,7 @@ judge_calibration_frozen_50/
 ├── v2.0-2026-08-15.baseline.json ← New baseline on new model
 ├── v0.9-2025-11-01.json          ← Archived (old model, pre-production)
 └── CHANGELOG.md
+```
 
 When a new version is created:
 
@@ -8039,6 +8123,7 @@ end to end flow how The project is an autonomous ICSR case processing system —
 
 Mapped the complete ICSR case processing workflow for your interview.
 End-to-End Flow: ICSR Case Processing
+```text
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
 │  STEP 0: REPORT ARRIVES                                                                 │
 │                                                                                         │
@@ -8239,15 +8324,18 @@ End-to-End Flow: ICSR Case Processing
 │  └─────────────────────────────────────────────────────────────────────────────────┘    │
 │                                                                                         │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
+```
 
 
 ICSR case processing system Langfuse Prometheus GitHub
 
 View all
 Timeline Summary
+```text
 Time:  0ms    50ms    2.3s    3.1s    6.2s    6.8s    11s    12.1s   15.9s   18s
        │       │       │       │       │       │       │       │       │       │
        ▼       ▼       ▼       ▼       ▼       ▼       ▼       ▼       ▼       ▼
+```
      REPORT  NORMAL-  INTAKE  TRIAGE  CODING  DEDUP  MEDICAL COMPLI- DRAFT  SUBMIT
      ARRIVES  IZE      EXTRACT ASSESS  MEDDRA  CHECK  REVIEW  ANCE   +E2B   +ACK
                                                (RAG)         (GPT-4o) (GPT-4o-mini)
@@ -8316,6 +8404,7 @@ Azure Foundry vs Microsoft Embedding custom state schema site:reddit.com
 
 View all
 The Correct Architecture (not "Foundry OR LangGraph" — it's "LangGraph ON Foundry")
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  FOUNDRY (managed platform layer)                               │
 │                                                                 │
@@ -8351,6 +8440,7 @@ The Correct Architecture (not "Foundry OR LangGraph" — it's "LangGraph ON Foun
 │  • Azure AI Search (MedDRA index, prior cases index)            │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
+```
 
 Key insight from Microsoft's own docs (Sept 2026):
 
@@ -8797,6 +8887,7 @@ EPAM Novartis ICSR case processing full codebase project structure
 
 View all
 Top-Level Structure
+```text
 icser-platform/
 │
 ├── 📁 00-governance/                          ← GxP / Compliance (big orgs have this)
@@ -9254,6 +9345,7 @@ icser-platform/
 ├── README.md
 ├── LICENSE                                    ← (internal, not open source)
 └── SECURITY.md                                ← How to report vulnerabilities
+```
 
 Key Differences from "Simplified" Version
 What Big Orgs Add	Why
@@ -9284,6 +9376,7 @@ Incident post-mortems	Confluence / SharePoint	Not code
 Training materials	Internal LMS	Not code
 
 The "Big Org" Git Workflow
+```text
 main (protected, no direct push)
   │
   ├── feature/ICSR-1234-add-japanese-support
@@ -9305,6 +9398,7 @@ main (protected, no direct push)
         → Tag → auto-generate release notes
         → Update VERSIONS.json
         → Trigger full validation suite (IQ/OQ/PQ if major)
+```
 
 One-Sentence Summary
 "The repo is organized by concern (governance, infra, app, k8s, ci-cd, monitoring, docs, security, scripts, analytics) — not by 'stuff.' Every directory has a clear owner (CODEOWNERS). Every change goes through CI with a regression gate. Every prompt change is a change control event. Every deployment is canary with auto-rollback. And there's a manual fallback script in case the AI is down — because in pharma, you never let a regulatory deadline depend on a single system being up."
