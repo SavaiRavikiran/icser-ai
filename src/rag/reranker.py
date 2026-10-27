@@ -2,6 +2,8 @@
 import asyncio
 import structlog
 
+from src.config import settings
+
 
 logger = structlog.get_logger()
 
@@ -16,6 +18,15 @@ async def cross_encoder_rerank(
 ) -> list[dict]:
     """Rerank documents using a cross-encoder model."""
     global _model
+    if settings.demo_mode:
+        from src.demo.search import overlap_score
+
+        scored = [
+            {**d, "rerank_score": overlap_score(query, f"{d['term']} {d.get('definition', '')}")}
+            for d in documents
+        ]
+        return sorted(scored, key=lambda d: d["rerank_score"], reverse=True)[:top_k]
+
     if _model is None:
         from sentence_transformers import CrossEncoder
         _model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")

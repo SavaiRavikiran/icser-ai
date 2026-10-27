@@ -112,7 +112,7 @@ class MedDRACodingAgent(BaseAgent):
         llm = get_llm(model="gpt-4o-mini")
         response = await llm.ainvoke(
             f"What is the WHO Drug (INN) code for: {drug_name}? "
-            f"Respond with JSON: {{"code": "...", "name": "..."}}"
+            'Respond with JSON: {"code": "...", "name": "..."}'
         )
         import json
         result = json.loads(response.content)

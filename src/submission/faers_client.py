@@ -1,7 +1,10 @@
 """FAERS / EudraVigilance submission client."""
+import uuid
+
 import httpx
 import structlog
-from datetime import datetime, timezone
+
+from src.config import settings
 
 
 logger = structlog.get_logger()
@@ -15,6 +18,9 @@ class FAERSClient:
     async def submit(self, e2b_xml: str) -> dict:
         """Submit E2B(R3) XML to the safety database."""
         logger.info("faers_submit_start")
+
+        if settings.demo_mode:
+            return {"success": True, "ack_id": f"DEMO-ACK-{uuid.uuid4().hex[:8].upper()}", "status": "submitted"}
 
         try:
             async with httpx.AsyncClient(timeout=30) as client:

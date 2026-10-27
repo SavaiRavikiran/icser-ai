@@ -5,8 +5,8 @@ from langfuse import observe
 from src.agents.base_agent import BaseAgent
 from src.llm.router import get_llm
 from src.llm.prompts import INTAKE_EXTRACTION_PROMPT
-from src.ingestion.pdf_parser import parse_pdf
-from src.ingestion.email_parser import parse_email
+from src.ingestion.parsers.pdf_parser import parse_pdf
+from src.ingestion.parsers.email_parser import parse_email
 from src.config import settings
 
 

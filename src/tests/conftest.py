@@ -1,6 +1,9 @@
 """Shared test fixtures."""
+import os
+
 import pytest
-from src.state import ICSRState
+
+os.environ["DEMO_MODE"] = "true"  # run agents against the simulated LLM / back-ends
 
 
 @pytest.fixture
@@ -90,4 +93,12 @@ def golden_case() -> dict:
             "triage_confidence": 0.0,
             "meddra_term": None,
             "meddra_code": None,
-            "med   
+            "meddra_confidence": 0.0,
+        },
+        "expected": {
+            "patient_age": 62,
+            "patient_sex": "M",
+            "drug_name": "Atorvastatin",
+            "meddra_term": "Myalgia",
+        },
+    }

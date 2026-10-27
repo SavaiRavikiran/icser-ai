@@ -9,6 +9,7 @@ from src.config import settings
 logger = structlog.get_logger()
 
 _pool: redis.Redis | None = None
+_memory: dict = {}  # in-process cache used in DEMO_MODE
 
 
 async def _get_redis() -> redis.Redis:
@@ -25,6 +26,8 @@ async def _get_redis() -> redis.Redis:
 
 async def get_cache(key: str) -> dict | str | None:
     """Get a cached value from Redis."""
+    if settings.demo_mode:
+        return _memory.get(key)
     r = await _get_redis()
     value = await r.get(key)
     if value is None:
@@ -37,6 +40,9 @@ async def get_cache(key: str) -> dict | str | None:
 
 async def set_cache(key: str, value, ttl: int = 86400):
     """Set a cached value in Redis with TTL."""
+    if settings.demo_mode:
+        _memory[key] = value
+        return
     r = await _get_redis()
     if isinstance(value, (dict, list)):
         value = json.dumps(value)

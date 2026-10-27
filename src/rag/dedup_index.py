@@ -15,6 +15,20 @@ async def search_similar_cases(
     threshold: float = 0.92,
 ) -> list[dict]:
     """Search for similar cases in the dedup vector index."""
+    if settings.demo_mode:
+        from src.demo.data import PRIOR_CASES
+        from src.demo.search import jaccard
+
+        scored = [
+            {"case_id": c["case_id"], "summary": c["summary"], "similarity": jaccard(text, c["summary"])}
+            for c in PRIOR_CASES
+        ]
+        return sorted(
+            (c for c in scored if c["similarity"] >= threshold),
+            key=lambda c: c["similarity"],
+            reverse=True,
+        )[:top_k]
+
     embedder = get_embedding_model()
     query_vector = await embedder.aembed_query(text)
 

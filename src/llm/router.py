@@ -6,8 +6,12 @@ from src.config import settings
 
 
 @lru_cache(maxsize=10)
-def get_llm(model: str = "gpt-4o") -> ChatOpenAI:
+def get_llm(model: str = "gpt-4o"):
     """Get a cached LLM instance routed through Azure AI Foundry."""
+    if settings.demo_mode:
+        from src.demo.fake_llm import FakeLLM
+        return FakeLLM(model)
+
     if model == "gpt-4o-mini":
         model_name = settings.foundry_model_gpt4o_mini
     else:
@@ -19,7 +23,6 @@ def get_llm(model: str = "gpt-4o") -> ChatOpenAI:
         max_tokens=4096,
         api_key=settings.foundry_api_key,
         base_url=f"{settings.foundry_endpoint}/openai/deployments/{model_name}",
-        api_base=settings.foundry_endpoint,
         default_headers={"api-key": settings.foundry_api_key},
     )
 
@@ -27,6 +30,8 @@ def get_llm(model: str = "gpt-4o") -> ChatOpenAI:
 @lru_cache(maxsize=1)
 def get_embedding_model() -> AzureOpenAIEmbeddings:
     """Get the embedding model instance."""
+    if settings.demo_mode:
+        raise RuntimeError("Embeddings are not available in DEMO_MODE")
     return AzureOpenAIEmbeddings(
         model=settings.foundry_embedding_model,
         api_key=settings.foundry_api_key,
