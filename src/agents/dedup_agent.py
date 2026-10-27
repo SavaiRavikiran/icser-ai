@@ -51,7 +51,7 @@ class DedupAgent(BaseAgent):
                 f"Are these two adverse event reports about the SAME patient and event?\n\n"
                 f"New case: {search_text}\n"
                 f"Existing case {top_match['case_id']}: {top_match['summary']}\n\n"
-                f"Respond JSON: {{"is_duplicate": true/false, "reason": "..."}}"
+                'Respond JSON: {"is_duplicate": true/false, "reason": "..."}'
             )
             response = await llm.ainvoke(prompt)
             return response

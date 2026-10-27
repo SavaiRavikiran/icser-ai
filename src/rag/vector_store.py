@@ -15,6 +15,17 @@ async def vector_search(
     top_k: int = 20,
 ) -> list[dict]:
     """Search Azure AI Search vector index."""
+    if settings.demo_mode:
+        from src.demo.data import MEDDRA_TERMS
+        from src.demo.search import overlap_score
+
+        scored = [
+            {**t, "score": overlap_score(text, f"{t['term']} {t['definition']}")}
+            for t in MEDDRA_TERMS
+        ]
+        scored.sort(key=lambda t: t["score"], reverse=True)
+        return scored[:top_k]
+
     embedder = get_embedding_model()
     query_vector = await embedder.aembed_query(text)
 

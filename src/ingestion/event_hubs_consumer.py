@@ -2,9 +2,7 @@
 import asyncio
 import json
 import structlog
-from azure.eventhub import EventHubConsumerClient, EventHubConsumerGroup
 
-from src.config import settings
 from src.ingestion.normalizer import normalize_case
 from src.observability.metrics import QUEUE_DEPTH
 
@@ -18,34 +16,44 @@ class EventHubsConsumer:
         self.callback = callback
         self._task: asyncio.Task | None = None
 
-    def start(self):
-        """Start consuming events (blocking)."""
+    def start(self) -> asyncio.Task:
+        """Start consuming events as a background task on the running event loop."""
         self._task = asyncio.ensure_future(self._consume())
         logger.info("eventhubs_consumer_started")
+        return self._task
 
     async def _consume(self):
-        """Main consumption loop."""
-        consumer = EventHubConsumerClient.from_connection_string(
-            connection_string=self.connection_string,
-            consumer_group="$default",
-            eventhub_name="icser-reports",
-        )
+        """Main consumption loop (reconnects on error)."""
+        from azure.eventhub.aio import EventHubConsumerClient
 
-        async with consumer:
-            async with consumer.get_batch_receiver(
-                partition_id="0",
-                starting_position="-1",  # Latest
-            ) as receiver:
-                while True:
-                    try:
-                        events = await receiver.receive_batch(max_message_count=10, timeout_in_seconds=30)
-                        if events:
-                            QUEUE_DEPTH.set(len(events))
-                            for event in events:
-                                await self._process_event(event)
-                    except Exception as e:
-                        logger.error("eventhubs_receive_error", error=str(e))
-                        await asyncio.sleep(5)
+        while True:
+            consumer = EventHubConsumerClient.from_connection_string(
+                conn_str=self.connection_string,
+                consumer_group="$default",
+                eventhub_name="icser-reports",
+            )
+            try:
+                async with consumer:
+                    await consumer.receive_batch(
+                        on_event_batch=self._on_event_batch,
+                        max_batch_size=10,
+                        max_wait_time=30,
+                        starting_position="@latest",
+                    )
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.error("eventhubs_receive_error", error=str(e))
+                await asyncio.sleep(5)
+
+    async def _on_event_batch(self, partition_context, events):
+        """Handle a batch of events from one partition."""
+        if not events:
+            return
+        QUEUE_DEPTH.set(len(events))
+        for event in events:
+            await self._process_event(event)
+        await partition_context.update_checkpoint()
 
     async def _process_event(self, event):
         """Process a single Event Hub event."""
@@ -72,4 +80,4 @@ class EventHubsConsumer:
             )
 
         except Exception as e:
-            logger.error("case_processing_error", error=str(e), event_id=event.sequence_number)   
+            logger.error("case_processing_error", error=str(e), event_id=getattr(event, "sequence_number", None))   

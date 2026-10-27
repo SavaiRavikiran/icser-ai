@@ -1,5 +1,5 @@
 """Application configuration via pydantic-settings."""
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
 
@@ -62,9 +62,19 @@ class Settings(BaseSettings):
     # Prometheus
     prometheus_port: int = Field(8000, alias="PROMETHEUS_PORT")
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    # Demo mode: run the full pipeline locally with a simulated LLM, in-memory
+    # cache and mock MedDRA / dedup / FAERS back-ends (no Azure needed).
+    demo_mode: bool = Field(False, alias="DEMO_MODE")
+
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 
 
 settings = Settings()   
+
+if settings.demo_mode:
+    import os
+
+    # No Langfuse server in demo mode: keep the @observe decorators quiet.
+    os.environ.setdefault("LANGFUSE_TRACING_ENABLED", "false")
+    os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-demo")
+    os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-demo")

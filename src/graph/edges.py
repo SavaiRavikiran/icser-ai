@@ -23,6 +23,11 @@ def route_after_coding(state: dict) -> str:
     return "dedup"
 
 
+def route_after_dedup(state: dict) -> str:
+    """After dedup: stop on duplicates, otherwise continue to medical review."""
+    return "end" if state.get("is_duplicate") else "medical_review"
+
+
 def route_after_compliance(state: dict) -> str:
     """After compliance: route to drafting, back to coding, or end."""
     status = state.get("compliance_status", "pending")
@@ -34,7 +39,6 @@ def route_after_compliance(state: dict) -> str:
     if status == "failed":
         if iteration >= settings.max_compliance_iterations:
             # Max iterations reached → flag for manual review
-            state["error"] = "Compliance failed after max iterations"
             return "end"
         return "coding"  # Loop back
 

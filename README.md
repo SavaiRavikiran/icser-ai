@@ -55,24 +55,54 @@ grafana/           dashboards
 
 Copy `.env.example` to `.env` and fill in Azure, Foundry, Langfuse, database and threshold settings (e.g. `MEDDRA_CONFIDENCE_THRESHOLD`, `DEDUP_SIMILARITY_THRESHOLD`, `COST_BUDGET_MONTHLY_USD`).
 
-### Running (intended)
+### Quick start — local demo UI (no Azure needed)
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install langgraph langchain-openai langfuse pydantic-settings structlog httpx \
+    prometheus-client redis grpcio grpcio-health-checking fastapi uvicorn \
+    beautifulsoup4 lxml azure-eventhub pytest pytest-asyncio respx
+python -m src.ui            # → http://127.0.0.1:8080   (DEMO_MODE is on by default)
+```
+
+The **Pipeline Console** shows:
+
+- **System health** — graph compiles (8/8 agents), routing rules, and an end-to-end self-test. A green banner means the pipeline works.
+- **Run a report** — pick one of five sample reports (serious, non-serious, duplicate, incomplete, fatal) or paste your own, then see each agent's step, the MedDRA code, causality, compliance checklist, the generated E2B(R3) XML and the (mock) submission ack.
+- `/metrics` (Prometheus) and `/docs` (OpenAPI) on the same port.
+
+`DEMO_MODE=true` swaps the external dependencies for local stand-ins: a rule-based fake LLM (`src/demo/fake_llm.py`), a small in-memory MedDRA subset and prior-case list (`src/demo/data.py`), an in-memory cache instead of Redis, and a mock FAERS client. The agents, LangGraph wiring, routing, compliance loop and XML generation are the real code.
+
+Sample scenarios and what to expect:
+
+| Sample | Expected outcome |
+|---|---|
+| Serious: abdominal pain | all 8 steps, submitted, 15-day deadline |
+| Non-serious: muscle pain | all 8 steps, submitted, 90-day deadline |
+| Duplicate | stops after Dedup, nothing submitted |
+| Incomplete | compliance fails and loops back to coding 3×, flagged for manual review |
+| Fatal: anaphylaxis | all 8 steps, submitted, 7-day deadline |
+
+### Running for real (Azure)
 
 ```bash
 pip install -r requirements.txt
-cp .env.example .env
-python -m src.main        # gRPC health server (:50051) + Event Hubs consumer + Prometheus metrics
-pytest src/tests          # tests
+cp .env.example .env        # fill in Foundry, Event Hubs, Azure Search, Redis, Langfuse ...
+python -m src.main          # gRPC health (:50051) + Event Hubs consumer + Prometheus (:8000)
+DEMO_MODE=false python -m src.ui   # same console; health panel checks the live services
 ```
 
-### Current status
+### Tests
 
-This repository is an **early scaffold / work in progress and does not run yet**. Known issues found on review:
+```bash
+pytest          # 13 tests, run entirely in demo mode
+```
 
-- Syntax errors in `src/agents/dedup_agent.py`, `src/agents/meddra_coding_agent.py`, `src/observability/prometheus_exporter.py` and `src/tests/conftest.py` (truncated/misplaced code).
-- `src/rag/ vector_store.py` has a stray space in its filename, so `src.rag.vector_store` cannot be imported.
-- Imports such as `src.ingestion.pdf_parser` / `email_parser` point to modules that actually live in `src/ingestion/parsers/`.
-- `test_*.py` files are empty, and `pyproject.toml` sets `testpaths = ["tests"]` while tests live in `src/tests`.
-- `azure-pipelines.yml` is empty; `requirements.txt` lists `azure-search-opensearch`, which is not a real package (likely `azure-search-documents`).
+### Status
+
+- Pipeline, routing, compliance loop, E2B XML generation and the UI run end to end in demo mode and are covered by tests.
+- Live mode (real Azure Foundry / Event Hubs / Azure Search / FAERS) has **not** been exercised: it needs real credentials and indices (`meddra_terms`, `prior_cases`), and the FAERS endpoint in `src/submission/faers_client.py` is a placeholder.
+- Not implemented / still stubs: HL7, JSON and social-media parsers are not wired into intake; evaluation modules expect `/data/eval/golden_set.json`; `azure-pipelines.yml` is empty.
 
 ---
 

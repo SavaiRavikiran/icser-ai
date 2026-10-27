@@ -45,7 +45,7 @@ class ComplianceAgent(BaseAgent):
             "severity": state.get("severity"),
             "causality": state.get("causality_assessment"),
             "meddra_term": state.get("meddra_term"),
-            "medical_narrative": state.get("medical_narrative", "")[:500],
+            "medical_narrative": (state.get("medical_narrative") or "")[:500],
         }
 
         @observe(name="compliance_validation", as_type="generation")

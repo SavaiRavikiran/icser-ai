@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ICSR AI — Pipeline Console</title>
+<style>
+  :root {
+    --bg:#f5f7fa; --card:#fff; --text:#1c2733; --muted:#6b7a8c; --line:#e2e8f0;
+    --ok:#1a9e5c; --bad:#d63b3b; --warn:#d98a0b; --accent:#2f5bea; --idle:#cbd5e1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f141b; --card:#18202b; --text:#e6edf5; --muted:#8a9bb0; --line:#273244; --idle:#3a475a; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:16px 24px; display:flex; align-items:center; gap:12px; border-bottom:1px solid var(--line); background:var(--card); }
+  header h1 { font-size:18px; margin:0; }
+  .badge { font-size:12px; padding:2px 10px; border-radius:99px; background:var(--idle); color:var(--text); }
+  .badge.demo { background:#fde9c8; color:#8a5200; }
+  main { max-width:1200px; margin:0 auto; padding:16px; display:grid; gap:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; }
+  .card h2 { font-size:14px; margin:0 0 12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  .checks { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:8px; }
+  .check { display:flex; gap:8px; align-items:flex-start; padding:8px 10px; border:1px solid var(--line); border-radius:8px; }
+  .dot { width:10px; height:10px; border-radius:50%; margin-top:5px; flex:none; background:var(--idle); }
+  .dot.ok { background:var(--ok); } .dot.bad { background:var(--bad); } .dot.run { background:var(--accent); animation:pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity:.3; } }
+  .muted { color:var(--muted); font-size:12px; }
+  textarea, select { width:100%; font:inherit; color:inherit; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px; }
+  textarea { min-height:120px; resize:vertical; }
+  button { font:inherit; padding:8px 18px; border:0; border-radius:8px; background:var(--accent); color:#fff; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:wait; }
+  .pipeline { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .step { padding:6px 12px; border:1px solid var(--line); border-radius:8px; display:flex; gap:6px; align-items:center; cursor:pointer; }
+  .step.done { border-color:var(--ok); } .step.skipped { opacity:.45; } .step.fail { border-color:var(--bad); }
+  .arrow { color:var(--muted); }
+  details.stepdetail { border:1px solid var(--line); border-radius:8px; padding:8px 12px; margin-top:8px; }
+  details summary { cursor:pointer; font-weight:600; }
+  pre { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:10px; overflow:auto; font-size:12px; margin:8px 0 0; max-height:320px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+  .kv b { display:block; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:600; }
+  .pill { display:inline-block; padding:1px 10px; border-radius:99px; font-size:12px; background:var(--idle); }
+  .pill.ok { background:#c9f0dc; color:#0b5b34; } .pill.bad { background:#f8d2d2; color:#8a1b1b; } .pill.warn { background:#fde9c8; color:#8a5200; }
+  .verdict { font-size:16px; font-weight:600; padding:10px 14px; border-radius:8px; margin-bottom:12px; }
+  .verdict.ok { background:#c9f0dc; color:#0b5b34; } .verdict.bad { background:#f8d2d2; color:#8a1b1b; } .verdict.warn { background:#fde9c8; color:#8a5200; }
+  ul.cl { list-style:none; padding:0; margin:0; display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ICSR AI — Pipeline Console</h1>
+  <span id="mode" class="badge">…</span>
+  <span class="muted" style="margin-left:auto"><a href="/metrics" target="_blank" style="color:inherit">Prometheus metrics</a> · <a href="/docs" target="_blank" style="color:inherit">API docs</a></span>
+</header>
+<main>
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <h2 style="margin:0">System health</h2>
+      <button id="recheck" style="padding:4px 12px;font-size:12px">Re-run checks</button>
+    </div>
+    <div id="overall" class="verdict" style="margin-top:12px">Running checks…</div>
+    <div id="checks" class="checks"></div>
+  </section>
+
+  <section class="card">
+    <h2>Submit an adverse-event report</h2>
+    <div class="row" style="margin-bottom:8px">
+      <select id="sample" style="flex:3"></select>
+      <select id="source" style="flex:1">
+        <option>email</option><option>pdf</option><option>web_form</option><option>hl7</option><option>social_media</option>
+      </select>
+    </div>
+    <textarea id="text" placeholder="Paste or write a free-text adverse event report…"></textarea>
+    <div class="row" style="margin-top:8px"><button id="run">Run pipeline</button><span id="runinfo" class="muted"></span></div>
+  </section>
+
+  <section class="card" id="resultcard" hidden>
+    <h2>Result</h2>
+    <div id="verdict" class="verdict"></div>
+    <div class="pipeline" id="pipeline"></div>
+    <div id="summary" class="grid" style="margin-top:16px"></div>
+    <h2 style="margin-top:20px">Compliance checklist</h2>
+    <ul class="cl" id="checklist"></ul>
+    <h2 style="margin-top:20px">Step-by-step trace</h2>
+    <div id="trace"></div>
+    <h2 style="margin-top:20px">Generated E2B(R3) XML</h2>
+    <pre id="xml"></pre>
+  </section>
+</main>
+
+<script>
+const AGENTS = ["intake","triage","coding","dedup","medical_review","compliance","drafting","submission"];
+const LABEL = {intake:"1 Intake",triage:"2 Triage",coding:"3 MedDRA coding",dedup:"4 Dedup",medical_review:"5 Medical review",compliance:"6 Compliance",drafting:"7 Drafting",submission:"8 Submission"};
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "—").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+
+async function loadHealth() {
+  $("overall").className = "verdict"; $("overall").textContent = "Running checks…"; $("checks").innerHTML = "";
+  try {
+    const h = await (await fetch("/api/health")).json();
+    $("overall").className = "verdict " + (h.ok ? "ok" : "bad");
+    $("overall").textContent = h.ok ? "All checks passed — the pipeline is working." : "Some checks failed — see below.";
+    $("checks").innerHTML = h.checks.map(c =>
+      `<div class="check"><span class="dot ${c.ok ? "ok" : "bad"}"></span><div><b>${esc(c.name)}</b><div class="muted">${esc(c.detail)}</div></div></div>`).join("");
+    const demo = h.checks[0].detail.startsWith("DEMO");
+    $("mode").textContent = demo ? "DEMO mode" : "LIVE mode"; $("mode").className = "badge" + (demo ? " demo" : "");
+  } catch (e) {
+    $("overall").className = "verdict bad"; $("overall").textContent = "Cannot reach backend: " + e;
+  }
+}
+
+async function loadSamples() {
+  const samples = await (await fetch("/api/samples")).json();
+  $("sample").innerHTML = samples.map((s, i) => `<option value="${i}">${esc(s.title)}</option>`).join("") + `<option value="-1">Custom…</option>`;
+  const pick = () => { const i = +$("sample").value; if (i >= 0) { $("text").value = samples[i].text; $("source").value = samples[i].source; } };
+  $("sample").onchange = pick; pick();
+}
+
+function pill(v, good) { return `<span class="pill ${good === undefined ? "" : good ? "ok" : "bad"}">${esc(v)}</span>`; }
+function kv(k, v) { return `<div class="kv"><b>${k}</b>${v}</div>`; }
+
+async function run() {
+  $("run").disabled = true; $("runinfo").textContent = "Processing…";
+  let r;
+  try {
+    r = await (await fetch("/api/process", { method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ text: $("text").value, source: $("source").value }) })).json();
+  } catch (e) { r = { status: "error", error: String(e), steps: [], state: {} }; }
+  $("run").disabled = false; $("runinfo").textContent = `${r.duration_ms ?? 0} ms`;
+  render(r);
+}
+
+function render(r) {
+  const s = r.state || {}, ran = {};
+  (r.steps || []).forEach(st => ran[st.agent] = (ran[st.agent] || 0) + 1);
+  $("resultcard").hidden = false;
+
+  const msg = {
+    submitted: ["ok", `Submitted to the safety database — ack ${s.submission_ack_id}. Reporting deadline: ${s.reporting_deadline_days} days.`],
+    duplicate: ["warn", `Duplicate of existing case ${s.duplicate_case_id} — processing stopped, nothing submitted.`],
+    error: ["bad", r.error || s.error || "Pipeline error"],
+    not_submitted: ["warn", "Pipeline finished without submission."],
+  }[r.status] || ["bad", r.status];
+  $("verdict").className = "verdict " + msg[0]; $("verdict").textContent = msg[1];
+
+  $("pipeline").innerHTML = AGENTS.map((a, i) => {
+    const failed = (r.steps || []).some(st => st.agent === a && st.error);
+    const cls = failed ? "fail" : ran[a] ? "done" : "skipped";
+    const icon = failed ? "✕" : ran[a] ? "✓" : "–";
+    return (i ? `<span class="arrow">→</span>` : "") + `<div class="step ${cls}">${icon} ${LABEL[a]}${ran[a] > 1 ? ` ×${ran[a]}` : ""}</div>`;
+  }).join("");
+
+  $("summary").innerHTML = [
+    kv("Patient", `${esc(s.patient_age)} y, ${esc(s.patient_sex)}`),
+    kv("Suspect drug", `${esc(s.drug_name)} ${esc(s.drug_dose || "")}`),
+    kv("Adverse event", esc(s.adverse_event_text)),
+    kv("Outcome", esc(s.adverse_event_outcome)),
+    kv("Severity", pill(s.severity || "—", s.severity === "non_serious")),
+    kv("Expected / causal", `${s.is_expected ? "expected" : "unexpected"} / ${s.is_causally_related ? "related" : "unrelated"}`),
+    kv("MedDRA term", `${esc(s.meddra_term)} <span class="muted">(${esc(s.meddra_code)}, conf ${(s.meddra_confidence ?? 0).toFixed(2)})</span>`),
+    kv("Causality (WHO-UMC)", esc(s.causality_assessment)),
+    kv("Compliance", pill(s.compliance_status || "—", s.compliance_status === "passed") + ` <span class="muted">iterations: ${s.compliance_iteration ?? 0}</span>`),
+    kv("Submission", pill(s.submission_status || "—", s.submission_status === "submitted")),
+    kv("Narrative", esc(s.report_narrative || s.medical_narrative)),
+  ].join("");
+
+  const checks = s.compliance_checks || {};
+  $("checklist").innerHTML = Object.keys(checks).length
+    ? Object.entries(checks).map(([k, v]) => `<li>${v ? "✅" : "❌"} ${esc(k)}</li>`).join("")
+    : `<li class="muted">Compliance step did not run.</li>`;
+
+  $("trace").innerHTML = (r.steps || []).map(st =>
+    `<details class="stepdetail"><summary>${esc(LABEL[st.agent] || st.agent)} <span class="muted">· ${st.duration_ms} ms</span></summary>
+     <pre>${esc(JSON.stringify(st.changes, null, 2))}</pre></details>`).join("") || `<div class="muted">No steps ran.</div>`;
+  $("xml").textContent = s.e2b_xml || "Not generated (case did not reach drafting).";
+}
+
+$("run").onclick = run; $("recheck").onclick = loadHealth;
+loadSamples(); loadHealth();
+</script>
+</body>
+</html>

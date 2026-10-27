@@ -42,14 +42,12 @@ def _langfuse_scrape_loop():
         time.sleep(30)
 
 
-def _scrape_langfuse():
+async def _scrape_langfuse():
     """Pull latest eval scores and cost metrics from Langfuse API."""
-    headers = {
-        "Authorization": f"Basic {settings.langfuse_public_key}:{settings.langfuse_secret_key}",
-        "Content-Type": "application/json",
-    }
+    headers = {"Content-Type": "application/json"}
+    auth = (settings.langfuse_public_key, settings.langfuse_secret_key)
 
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with httpx.AsyncClient(timeout=10, auth=auth) as client:
         # Fetch latest scores
         resp = await client.get(
             f"{settings.langfuse_host}/api/public/scores",

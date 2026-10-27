@@ -5,6 +5,7 @@ from src.graph.edges import (
     route_after_triage,
     route_after_compliance,
     route_after_coding,
+    route_after_dedup,
 )
 from src.agents import (
     intake_agent,
@@ -37,7 +38,6 @@ def build_icser_graph():
 
     # Linear flow
     graph.add_edge("intake", "triage")
-    graph.add_edge("dedup", "medical_review")
     graph.add_edge("medical_review", "compliance")
     graph.add_edge("drafting", "submission")
     graph.add_edge("submission", END)
@@ -59,6 +59,15 @@ def build_icser_graph():
         {
             "dedup": "dedup",
             "compliance": "compliance",  # Skip dedup if high confidence
+        },
+    )
+
+    graph.add_conditional_edges(
+        "dedup",
+        route_after_dedup,
+        {
+            "medical_review": "medical_review",
+            "end": END,  # Duplicate of an existing case
         },
     )
 
